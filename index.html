@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>有休・欠勤申請</title>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/versions/2.22.3/sdk.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      background: #e3f0fb;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    #app {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    /* ヘッダー */
+    .header {
+      background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+      color: #fff;
+      padding: 18px 16px;
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 14px;
+      margin-bottom: 16px;
+      letter-spacing: 0.06em;
+      box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
+    }
+
+    /* ローディング・エラー */
+    .state-box {
+      background: #fff;
+      border-radius: 14px;
+      padding: 40px 24px;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(25, 118, 210, 0.1);
+    }
+    .state-box.error { border-left: 4px solid #e53935; }
+    .state-box p { color: #555; margin-top: 10px; font-size: 14px; line-height: 1.6; }
+
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid #bbdefb;
+      border-top-color: #1976d2;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 社員情報カード */
+    .employee-card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 10px rgba(25, 118, 210, 0.1);
+    }
+    .employee-card h3 {
+      font-size: 12px;
+      color: #90a4ae;
+      margin-bottom: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    /* 有休情報 */
+    .leave-stats { display: flex; gap: 10px; margin-bottom: 12px; }
+    .leave-stat {
+      flex: 1;
+      background: #e3f2fd;
+      border: 1.5px solid #bbdefb;
+      border-radius: 10px;
+      padding: 12px 8px;
+      text-align: center;
+    }
+    .leave-stat .num { font-size: 26px; font-weight: bold; color: #1976d2; line-height: 1; }
+    .leave-stat .unit { font-size: 11px; color: #90a4ae; }
+    .leave-stat .label { font-size: 11px; color: #546e7a; margin-top: 4px; }
+    .leave-stat.warning .num { color: #e65100; }
+    .leave-stat.warning { border-color: #ffe0b2; background: #fff8f0; }
+
+    /* 次回付与情報 */
+    .next-grant {
+      background: #f3e5f5;
+      border: 1.5px solid #ce93d8;
+      border-radius: 9px;
+      padding: 10px 12px;
+      font-size: 13px;
+      color: #4a148c;
+    }
+    .next-grant span { font-weight: bold; }
+
+    /* 社員属性バッジ */
+    .badge-row { display: flex; gap: 8px; margin-top: 10px; }
+    .badge {
+      background: #e3f2fd;
+      border: 1px solid #90caf9;
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12px;
+      color: #1565c0;
+      font-weight: bold;
+    }
+
+    /* 申請フォーム */
+    .form-card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(25, 118, 210, 0.1);
+    }
+    .form-card h2 {
+      font-size: 15px;
+      font-weight: bold;
+      color: #1976d2;
+      margin-bottom: 18px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #e3f2fd;
+    }
+
+    .form-group { margin-bottom: 18px; }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: bold;
+      color: #546e7a;
+      margin-bottom: 6px;
+      letter-spacing: 0.04em;
+    }
+    .form-group label .required {
+      color: #e53935;
+      margin-left: 4px;
+      font-size: 11px;
+    }
+
+    input[type="text"],
+    input[type="date"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid #cfd8dc;
+      border-radius: 9px;
+      font-size: 15px;
+      font-family: inherit;
+      color: #1a1a2e;
+      background: #fff;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #1976d2;
+      box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.12);
+    }
+
+    .date-row { display: flex; align-items: center; gap: 8px; }
+    .date-row input { flex: 1; }
+    .date-row span { color: #90a4ae; font-size: 14px; flex-shrink: 0; }
+
+    textarea { resize: vertical; min-height: 80px; }
+
+    /* ラジオボタン */
+    .radio-group { display: flex; gap: 10px; }
+    .radio-group label {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 11px 8px;
+      border: 1.5px solid #cfd8dc;
+      border-radius: 9px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: normal;
+      color: #546e7a;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+    }
+    .radio-group input[type="radio"] { display: none; }
+    .radio-group input[type="radio"]:checked + span {
+      font-weight: bold;
+    }
+    .radio-group label:has(input[type="radio"]:checked) {
+      border-color: #1976d2;
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .applicant-info {
+      background: #e3f2fd;
+      border: 1.5px solid #bbdefb;
+      border-radius: 9px;
+      padding: 12px 14px;
+      font-size: 14px;
+      color: #1a1a2e;
+      font-weight: bold;
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 8px;
+      letter-spacing: 0.06em;
+      box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
+      transition: opacity 0.2s, box-shadow 0.2s;
+    }
+    .btn-submit:hover { opacity: 0.9; }
+    .btn-submit:active { box-shadow: 0 2px 6px rgba(25, 118, 210, 0.2); }
+    .btn-submit:disabled {
+      background: #b0bec5;
+      box-shadow: none;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    .success-card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 48px 24px;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(25, 118, 210, 0.1);
+    }
+    .success-icon { font-size: 60px; margin-bottom: 18px; }
+    .success-card h2 { font-size: 20px; margin-bottom: 10px; color: #1976d2; }
+    .success-card p { color: #78909c; font-size: 14px; line-height: 1.7; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <div class="header">有休・欠勤申請</div>
+
+  <!-- ローディング -->
+  <div id="view-loading" class="state-box">
+    <div class="spinner"></div>
+    <p>読み込み中...</p>
+  </div>
+
+  <!-- エラー -->
+  <div id="view-error" class="state-box error hidden">
+    <p id="error-message">エラーが発生しました。</p>
+  </div>
+
+  <!-- メインフォーム -->
+  <div id="view-form" class="hidden">
+
+    <!-- 社員情報カード -->
+    <div class="employee-card">
+      <h3>あなたの有休情報</h3>
+      <div class="leave-stats">
+        <div class="leave-stat" id="stat-remaining">
+          <div class="num" id="val-remaining">-</div>
+          <div class="unit">日</div>
+          <div class="label">現在残日数</div>
+        </div>
+        <div class="leave-stat" id="stat-used">
+          <div class="num" id="val-used">-</div>
+          <div class="unit">日</div>
+          <div class="label">当年取得日数</div>
+        </div>
+      </div>
+      <div class="next-grant" id="next-grant-info">
+        次回付与日：読み込み中...
+      </div>
+      <div class="badge-row">
+        <div class="badge" id="badge-work-type">勤務区分：-</div>
+      </div>
+    </div>
+
+    <!-- 申請フォーム -->
+    <div class="form-card">
+      <h2>申請内容の入力</h2>
+      <form id="leave-form" novalidate>
+
+        <!-- 申請者（表示のみ） -->
+        <div class="form-group">
+          <label>申請者</label>
+          <div class="applicant-info" id="applicant-display">読み込み中...</div>
+          <input type="hidden" id="field-line-user-id" />
+          <input type="hidden" id="field-employee-no" />
+          <input type="hidden" id="field-work-type" />
+        </div>
+
+        <!-- 休暇種別 -->
+        <div class="form-group">
+          <label>休暇種別<span class="required">必須</span></label>
+          <div class="radio-group">
+            <label>
+              <input type="radio" name="leave_type" value="有休" id="type-yukyu" />
+              <span>有休</span>
+            </label>
+            <label>
+              <input type="radio" name="leave_type" value="欠勤" id="type-kekkin" />
+              <span>欠勤</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 申請日 -->
+        <div class="form-group">
+          <label>申請日<span class="required">必須</span></label>
+          <div class="date-row">
+            <input type="date" id="field-start-date" required />
+            <span>〜</span>
+            <input type="date" id="field-end-date" required />
+          </div>
+        </div>
+
+        <!-- 取得区分 -->
+        <div class="form-group">
+          <label>取得区分<span class="required">必須</span></label>
+          <div class="radio-group">
+            <label>
+              <input type="radio" name="leave_unit" value="全日" id="unit-full" checked />
+              <span>全日</span>
+            </label>
+            <label>
+              <input type="radio" name="leave_unit" value="半日" id="unit-half" />
+              <span>半日</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 理由・備考 -->
+        <div class="form-group">
+          <label for="field-reason">理由・備考</label>
+          <textarea id="field-reason" placeholder="任意で入力してください"></textarea>
+        </div>
+
+        <!-- 送信ボタン -->
+        <button type="submit" class="btn-submit" id="btn-submit">申請する</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 完了画面 -->
+  <div id="view-success" class="hidden">
+    <div class="success-card">
+      <div class="success-icon">✅</div>
+      <h2>申請完了</h2>
+      <p>申請が正常に送信されました。<br>承認結果はkintoneでご確認ください。</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ============================================================
+  // 設定値 — ここを環境に合わせて書き換えてください
+  // ============================================================
+  var CONFIG = {
+    LIFF_ID:               '2009609551-z0I0RPGm',
+    KINTONE_SUBDOMAIN:     'c-nexco-chuoh',
+    APPLICATION_APP_ID:    '673',
+    EMPLOYEE_APP_ID:       '858',
+    API_TOKEN_APPLICATION: '55O8h4OLpvDQyRtcaZAf3HBukkjeAbOTibUj7k1S',
+    API_TOKEN_EMPLOYEE:    'Nyv6WGaRcZoX8yXgdVspXrpIKdKBoVqgh9NRwFcl',
+  };
+  // ============================================================
+
+  function showView(id) {
+    ['view-loading', 'view-error', 'view-form', 'view-success'].forEach(function(v) {
+      document.getElementById(v).classList.toggle('hidden', v !== id);
+    });
+  }
+
+  function showError(msg) {
+    document.getElementById('error-message').textContent = msg;
+    showView('view-error');
+  }
+
+  function kintoneUrl(path) {
+    return 'https://' + CONFIG.KINTONE_SUBDOMAIN + '.cybozu.com/k/v1/' + path;
+  }
+
+  // 社員マスターからLINE User IDで検索
+  async function fetchEmployeeInfo(lineUserId) {
+    var query = encodeURIComponent('line_user_id = "' + lineUserId + '"');
+    var url = kintoneUrl('records.json')
+      + '?app=' + CONFIG.EMPLOYEE_APP_ID
+      + '&query=' + query
+      + '&fields[0]=employee_no'
+      + '&fields[1]=name'
+      + '&fields[2]=work_type'
+      + '&fields[3]=remaining_leave'
+      + '&fields[4]=used_days_this_year'
+      + '&fields[5]=next_grant_date'
+      + '&fields[6]=next_grant_days';
+    var res = await fetch(url, {
+      headers: { 'X-Cybozu-API-Token': CONFIG.API_TOKEN_EMPLOYEE }
+    });
+    if (!res.ok) throw new Error('社員情報の取得に失敗しました (' + res.status + ')');
+    var data = await res.json();
+    return data.records.length > 0 ? data.records[0] : null;
+  }
+
+  // 休暇申請をkintoneに登録
+  async function submitApplication(payload) {
+    var now = new Date();
+    var jst = new Date(now.getTime() + (9 * 60 - now.getTimezoneOffset()) * 60000);
+    var appliedAt = jst.toISOString().replace('Z', '+09:00');
+
+    var res = await fetch(kintoneUrl('record.json'), {
+      method: 'POST',
+      headers: {
+        'X-Cybozu-API-Token': CONFIG.API_TOKEN_APPLICATION,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        app: CONFIG.APPLICATION_APP_ID,
+        record: {
+          line_user_id: { value: payload.lineUserId },
+          applicant:    { value: payload.employeeNo },   // ルックアップキー（社員番号）
+          leave_type:   { value: payload.leaveType },
+          start_date:   { value: payload.startDate },
+          end_date:     { value: payload.endDate },
+          leave_unit:   { value: payload.leaveUnit },
+          reason:       { value: payload.reason },
+          applied_at:   { value: appliedAt }
+        }
+      })
+    });
+    if (!res.ok) {
+      var err = await res.json().catch(function() { return {}; });
+      throw new Error(err.message || '申請の送信に失敗しました (' + res.status + ')');
+    }
+    return await res.json();
+  }
+
+  function getRadioValue(name) {
+    var el = document.querySelector('input[name="' + name + '"]:checked');
+    return el ? el.value : '';
+  }
+
+  async function main() {
+    showView('view-loading');
+
+    // LIFF初期化
+    try {
+      await liff.init({ liffId: CONFIG.LIFF_ID });
+    } catch (e) {
+      showError('LIFFの初期化に失敗しました。LINEアプリから開いてください。');
+      return;
+    }
+
+    if (!liff.isLoggedIn()) {
+      liff.login();
+      return;
+    }
+
+    // LINEプロフィール取得
+    var profile;
+    try {
+      profile = await liff.getProfile();
+    } catch (e) {
+      showError('プロフィール情報の取得に失敗しました。');
+      return;
+    }
+
+    var lineUserId = profile.userId;
+
+    // 社員情報取得
+    var emp;
+    try {
+      emp = await fetchEmployeeInfo(lineUserId);
+    } catch (e) {
+      showError('社員情報の取得に失敗しました。管理者にお問い合わせください。\n(' + e.message + ')');
+      return;
+    }
+
+    if (!emp) {
+      showError('この LINEアカウントは社員マスターに登録されていません。\n総務担当者にご連絡ください。');
+      return;
+    }
+
+    // 社員情報を画面にセット
+    var employeeNo  = emp.employee_no ? emp.employee_no.value : '';
+    var name        = emp.name ? emp.name.value : profile.displayName;
+    var workType    = emp.work_type ? emp.work_type.value : '';
+    var remaining   = emp.remaining_leave ? emp.remaining_leave.value : '-';
+    var usedDays    = emp.used_days_this_year ? emp.used_days_this_year.value : '-';
+    var nextDate    = emp.next_grant_date ? emp.next_grant_date.value : '';
+    var nextDays    = emp.next_grant_days ? emp.next_grant_days.value : '';
+
+    document.getElementById('applicant-display').textContent = name + '（' + employeeNo + '）';
+    document.getElementById('field-line-user-id').value = lineUserId;
+    document.getElementById('field-employee-no').value = employeeNo;
+    document.getElementById('field-work-type').value = workType;
+
+    // 有休残日数・当年取得日数
+    document.getElementById('val-remaining').textContent = remaining;
+    document.getElementById('val-used').textContent = usedDays;
+
+    if (Number(remaining) < 3) {
+      document.getElementById('stat-remaining').classList.add('warning');
+    }
+    if (Number(usedDays) < 5) {
+      document.getElementById('stat-used').classList.add('warning');
+    }
+
+    // 次回付与情報
+    if (nextDate) {
+      document.getElementById('next-grant-info').innerHTML =
+        '次回付与日：<span>' + nextDate + '</span>（<span>' + nextDays + '日</span>）';
+    } else {
+      document.getElementById('next-grant-info').textContent = '次回付与日：未設定';
+    }
+
+    // 勤務区分バッジ
+    document.getElementById('badge-work-type').textContent = '勤務区分：' + (workType || '未設定');
+
+    // 今日の日付をデフォルト値に
+    var today = new Date().toISOString().slice(0, 10);
+    document.getElementById('field-start-date').value = today;
+    document.getElementById('field-end-date').value = today;
+
+    showView('view-form');
+
+    // フォーム送信
+    document.getElementById('leave-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      var leaveType = getRadioValue('leave_type');
+      var leaveUnit = getRadioValue('leave_unit');
+      var startDate = document.getElementById('field-start-date').value;
+      var endDate   = document.getElementById('field-end-date').value;
+      var reason    = document.getElementById('field-reason').value.trim();
+
+      if (!leaveType) { alert('休暇種別を選択してください。'); return; }
+      if (!leaveUnit) { alert('取得区分を選択してください。'); return; }
+      if (!startDate || !endDate) { alert('開始日・終了日を入力してください。'); return; }
+      if (startDate > endDate) { alert('終了日は開始日以降を選択してください。'); return; }
+
+      // 半日の場合は開始日＝終了日に制限
+      if (leaveUnit === '半日' && startDate !== endDate) {
+        alert('半日取得の場合は開始日と終了日を同じ日にしてください。');
+        return;
+      }
+
+      var btn = document.getElementById('btn-submit');
+      btn.disabled = true;
+      btn.textContent = '送信中...';
+
+      try {
+        await submitApplication({
+          lineUserId:  lineUserId,
+          employeeNo:  employeeNo,
+          leaveType:   leaveType,
+          startDate:   startDate,
+          endDate:     endDate,
+          leaveUnit:   leaveUnit,
+          reason:      reason
+        });
+        showView('view-success');
+      } catch (err) {
+        alert('送信エラー: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = '申請する';
+      }
+    });
+  }
+
+  main();
+</script>
+</body>
+</html>
